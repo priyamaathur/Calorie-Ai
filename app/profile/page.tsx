@@ -1,145 +1,179 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 
 export default function ProfilePage() {
 
-  const [name, setName] = useState("")
-  const [gender, setGender] = useState("")
-  const [height, setHeight] = useState("")
-  const [weight, setWeight] = useState("")
-  const [bmi, setBmi] = useState("")
+const router = useRouter()
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const { data: userData } = await supabase.auth.getUser()
+const [name,setName] = useState("")
+const [gender,setGender] = useState("")
+const [height,setHeight] = useState("")
+const [weight,setWeight] = useState("")
+const [bmi,setBmi] = useState("")
+const [category,setCategory] = useState("")
 
-      if (!userData.user) return
+useEffect(() => {
+const loadProfile = async () => {
+const { data: userData } = await supabase.auth.getUser()
 
-      const userId = userData.user.id
+if (!userData.user) {
+router.push("/login")
+return
+}
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single()
+const userId = userData.user.id
 
-      if (error) {
-        console.log(error)
-        return
-      }
+const { data } = await supabase
+.from("profiles")
+.select("*")
+.eq("id", userId)
+.single()
 
-      if (data) {
-        setName(data.full_name ?? "")
-        setGender(data.gender ?? "")
-        setHeight(data.height_cm?.toString() ?? "")
-        setWeight(data.weight_kg?.toString() ?? "")
-        setBmi(data.bmi?.toString() ?? "")
-      }
-    }
+if (data) {
+setName(data.full_name ?? "")
+setGender(data.gender ?? "")
+setHeight(data.height_cm?.toString() ?? "")
+setWeight(data.weight_kg?.toString() ?? "")
+setBmi(data.bmi?.toString() ?? "")
+setCategory(data.category ?? "")
+}
+}
 
-    loadProfile()
-  }, [])
+loadProfile()
+}, [])
 
-  const calculateBMI = () => {
-    const h = parseFloat(height) / 100
-    const w = parseFloat(weight)
+const calculateBMI = () => {
 
-    if (!h || !w) return
+const h = parseFloat(height) / 100
+const w = parseFloat(weight)
 
-    const bmiValue = (w / (h * h)).toFixed(2)
-    setBmi(bmiValue)
-  }
+if (!h || !w) return
 
-  const saveProfile = async () => {
-    const { data: userData } = await supabase.auth.getUser()
+const bmiValue = (w / (h * h)).toFixed(2)
+setBmi(bmiValue)
 
-    if (!userData.user) {
-      alert("User not logged in")
-      return
-    }
+let cat = ""
 
-    const userId = userData.user.id
+if (parseFloat(bmiValue) < 18.5) cat = "Underweight"
+else if (parseFloat(bmiValue) < 25) cat = "Normal"
+else cat = "Overweight"
 
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({
-        id: userId,
-        full_name: name,
-        gender: gender,
-        height_cm: height,
-        weight_kg: weight,
-        bmi: bmi
-      })
+setCategory(cat)
+}
 
-    if (error) {
-      alert(error.message)
-      return
-    }
+const saveProfile = async () => {
 
-    alert("Profile saved successfully")
-  }
+const { data: userData } = await supabase.auth.getUser()
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="p-8 border rounded-lg w-96 space-y-3">
+if (!userData.user) {
+alert("User not logged in")
+return
+}
 
-        <h1 className="text-2xl font-bold">Profile Setup</h1>
+const userId = userData.user.id
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Full Name"
-          value={name || ""}
-          onChange={(e) => setName(e.target.value)}
-        />
+const { error } = await supabase
+.from("profiles")
+.upsert({
+id: userId,
+full_name: name,
+gender: gender,
+height_cm: height,
+weight_kg: weight,
+bmi: bmi,
+category: category
+})
 
-        <select
-          className="border p-2 w-full"
-          value={gender}
-          onChange={(e) => setGender(e.target.value)}
-        >
-          <option value="">Select Gender</option>
-          <option>Male</option>
-          <option>Female</option>
-        </select>
+if (error) {
+alert(error.message)
+return
+}
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Height (cm)"
-          value={height}
-          onChange={(e) => setHeight(e.target.value)}
-        />
+alert("Profile saved successfully")
+router.push("/dashboard")
+}
 
-        <input
-          className="border p-2 w-full"
-          placeholder="Weight (kg)"
-          value={weight}
-          onChange={(e) => setWeight(e.target.value)}
-        />
+return (
+<div className="min-h-screen bg-black text-white flex items-center justify-center">
 
-        <button
-          onClick={calculateBMI}
-          className="bg-blue-500 text-white w-full p-2 rounded"
-        >
-          Calculate BMI
-        </button>
+<div className="bg-gray-800 p-6 rounded-xl w-96 space-y-4">
 
-        <input
-          className="border p-2 w-full"
-          placeholder="BMI"
-          value={bmi}
-          readOnly
-        />
+{/* HEADER */}
+<div className="flex justify-between items-center">
+<h1 className="text-2xl font-bold">Profile</h1>
 
-        <button
-          onClick={saveProfile}
-          className="bg-green-600 text-white w-full p-2 rounded"
-        >
-          Save Profile
-        </button>
+<button
+onClick={() => router.push("/dashboard")}
+className="bg-gray-700 px-3 py-1 rounded"
+>
+Back
+</button>
+</div>
 
-      </div>
-    </div>
-  )
+{/* INPUTS */}
+<input
+className="w-full p-2 rounded text-black"
+placeholder="Full Name"
+value={name}
+onChange={(e)=>setName(e.target.value)}
+/>
+
+<select
+className="w-full p-2 rounded text-black"
+value={gender}
+onChange={(e)=>setGender(e.target.value)}
+>
+<option value="">Select Gender</option>
+<option value="male">Male</option>
+<option value="female">Female</option>
+</select>
+
+<input
+className="w-full p-2 rounded text-black"
+placeholder="Height (cm)"
+value={height}
+onChange={(e)=>setHeight(e.target.value)}
+/>
+
+<input
+className="w-full p-2 rounded text-black"
+placeholder="Weight (kg)"
+value={weight}
+onChange={(e)=>setWeight(e.target.value)}
+/>
+
+<button
+onClick={calculateBMI}
+className="bg-blue-500 w-full p-2 rounded"
+>
+Calculate BMI
+</button>
+
+<input
+className="w-full p-2 rounded text-black"
+value={bmi}
+placeholder="BMI"
+readOnly
+/>
+
+{category && (
+<p className="text-center text-green-400">
+Category: {category}
+</p>
+)}
+
+<button
+onClick={saveProfile}
+className="bg-green-600 w-full p-2 rounded"
+>
+Save Profile
+</button>
+
+</div>
+
+</div>
+)
 }

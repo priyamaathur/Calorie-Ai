@@ -5,82 +5,95 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 
 export default function Dashboard() {
-  const router = useRouter()
+
+const router = useRouter()
 
 useEffect(() => {
-  const checkUser = async () => {
-    const { data } = await supabase.auth.getUser()
+const checkUser = async () => {
+const { data } = await supabase.auth.getUser()
 
-    if (!data.user) {
-      router.push("/login")
-      return
-    }
+if (!data.user) {
+router.push("/login")
+return
+}
 
-    const userId = data.user.id
+const userId = data.user.id
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", userId)
-      .single()
+const { data: profile } = await supabase
+.from("profiles")
+.select("id")
+.eq("id", userId)
+.single()
 
-    if (!profile) {
-      router.push("/profile")
-    }
-  }
+if (!profile) {
+router.push("/profile")
+}
+}
 
-  checkUser()
+checkUser()
 }, [])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
-  }
+const handleLogout = async () => {
+await supabase.auth.signOut()
+router.push("/login")
+}
+
 return (
-  <div className="flex min-h-screen flex-col items-center justify-center gap-6">
+<div className="min-h-screen bg-black text-white p-6">
 
-    <h1 className="text-3xl font-bold">
-      Calorie AI Dashboard
-    </h1>
+{/* HEADER */}
+<div className="flex justify-between items-center mb-6">
+<h1 className="text-3xl font-bold">Dashboard</h1>
 
-    <div className="flex flex-col gap-3 w-60">
+<button
+onClick={handleLogout}
+className="bg-red-500 px-4 py-2 rounded"
+>
+Logout
+</button>
+</div>
 
-      <button
-        onClick={() => router.push("/profile")}
-        className="bg-blue-500 text-white p-2 rounded"
-      >
-        Edit Profile
-      </button>
+{/* GRID CARDS */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <button
-        onClick={() => router.push("/scan")}
-        className="bg-purple-500 text-white p-2 rounded"
-      >
-        Scan Food (AI)
-      </button>
+{/* Scan Food */}
+<div
+onClick={() => router.push("/scan")}
+className="bg-gray-800 p-6 rounded-xl cursor-pointer hover:bg-gray-700"
+>
+<h2 className="text-xl font-semibold">🍔 Scan Food</h2>
+<p className="text-gray-400">Analyze food & calories</p>
+</div>
 
-      <button
-        onClick={() => router.push("/label")}
-        className="bg-yellow-500 text-white p-2 rounded"
-      >
-        Scan Food Label
-      </button>
+{/* Profile */}
+<div
+onClick={() => router.push("/profile")}
+className="bg-gray-800 p-6 rounded-xl cursor-pointer hover:bg-gray-700"
+>
+<h2 className="text-xl font-semibold">👤 Profile</h2>
+<p className="text-gray-400">View & update your health data</p>
+</div>
 
-      <button
-        onClick={() => router.push("/graph")}
-        className="bg-green-500 text-white p-2 rounded"
-      >
-        Calorie Graph
-      </button>
+{/* Diet */}
+<div
+onClick={() => router.push("/diet")}
+className="bg-gray-800 p-6 rounded-xl cursor-pointer hover:bg-gray-700"
+>
+<h2 className="text-xl font-semibold">🥗 Diet Plan</h2>
+<p className="text-gray-400">Personalized diet suggestions</p>
+</div>
 
-      <button
-        onClick={handleLogout}
-        className="bg-red-500 text-white p-2 rounded"
-      >
-        Logout
-      </button>
+{/* Exercise */}
+<div
+onClick={() => router.push("/exercise")}
+className="bg-gray-800 p-6 rounded-xl cursor-pointer hover:bg-gray-700"
+>
+<h2 className="text-xl font-semibold">🏃 Exercise</h2>
+<p className="text-gray-400">Workout recommendations</p>
+</div>
 
-    </div>
-  </div>
+</div>
+
+</div>
 )
 }
