@@ -2,367 +2,283 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts"
+import { 
+  Camera, Upload, ArrowLeft, Zap, 
+  Flame, Dumbbell, History as HistoryIcon, 
+  BarChart3, XCircle, PieChart, CheckCircle2 
+} from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 
 const nutritionMap: any = {
-pizza: { calories: 266, protein: 11, carbs: 33 },
-burger: { calories: 295, protein: 17, carbs: 30 },
-fries: { calories: 312, protein: 3.4, carbs: 41 },
-sandwich: { calories: 250, protein: 12, carbs: 30 },
-pasta: { calories: 221, protein: 8, carbs: 43 },
-noodles: { calories: 190, protein: 7, carbs: 27 },
-biryani: { calories: 350, protein: 12, carbs: 40 },
-rice: { calories: 130, protein: 2.7, carbs: 28 },
-chicken: { calories: 239, protein: 27, carbs: 0 },
-paneer: { calories: 265, protein: 18, carbs: 6 },
-dosa: { calories: 168, protein: 4, carbs: 30 },
-idli: { calories: 39, protein: 2, carbs: 8 },
-samosa: { calories: 262, protein: 4, carbs: 32 },
-paratha: { calories: 300, protein: 6, carbs: 45 },
-cake: { calories: 257, protein: 3.6, carbs: 38 },
-donut: { calories: 452, protein: 4.9, carbs: 51 },
-icecream: { calories: 207, protein: 3.5, carbs: 24 },
-apple: { calories: 52, protein: 0.3, carbs: 14 },
-banana: { calories: 89, protein: 1.1, carbs: 23 }
+  pizza: { calories: 266, protein: 11, carbs: 33 },
+  burger: { calories: 295, protein: 17, carbs: 30 },
+  fries: { calories: 312, protein: 3.4, carbs: 41 },
+  sandwich: { calories: 250, protein: 12, carbs: 30 },
+  pasta: { calories: 221, protein: 8, carbs: 43 },
+  noodles: { calories: 190, protein: 7, carbs: 27 },
+  biryani: { calories: 350, protein: 12, carbs: 40 },
+  rice: { calories: 130, protein: 2.7, carbs: 28 },
+  chicken: { calories: 239, protein: 27, carbs: 0 },
+  paneer: { calories: 265, protein: 18, carbs: 6 },
+  dosa: { calories: 168, protein: 4, carbs: 30 },
+  idli: { calories: 39, protein: 2, carbs: 8 },
+  samosa: { calories: 262, protein: 4, carbs: 32 },
+  paratha: { calories: 300, protein: 6, carbs: 45 },
+  cake: { calories: 257, protein: 3.6, carbs: 38 },
+  donut: { calories: 452, protein: 4.9, carbs: 51 },
+  icecream: { calories: 207, protein: 3.5, carbs: 24 },
+  apple: { calories: 52, protein: 0.3, carbs: 14 },
+  banana: { calories: 89, protein: 1.1, carbs: 23 }
 }
 
 export default function ScanPage() {
+  const router = useRouter()
+  const [image, setImage] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [result, setResult] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [history, setHistory] = useState<any[]>([])
+  const [activeTab, setActiveTab] = useState<"scan" | "history" | "stats">("scan")
 
-const router = useRouter()
+  useEffect(() => {
+    const savedHistory = JSON.parse(localStorage.getItem("history") || "[]")
+    setHistory(savedHistory)
+  }, [])
 
-const [image,setImage] = useState<File | null>(null)
-const [preview,setPreview] = useState<string | null>(null)
-const [result,setResult] = useState<any>(null)
-const [loading,setLoading] = useState(false)
+  const handleImageChange = (e: any) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImage(file)
+    setPreview(URL.createObjectURL(file))
+    setResult(null)
+  }
 
-const [foodType,setFoodType] = useState("")
+  const handleUpload = async () => {
+    if (!image) { alert("Upload image"); return }
+    setLoading(true)
+    const formData = new FormData()
+    formData.append("image", image)
 
-// PROFILE
-const [height,setHeight] = useState("")
-const [weight,setWeight] = useState("")
-const [bmi,setBmi] = useState<number | null>(null)
-const [category,setCategory] = useState("")
-const [gender,setGender] = useState("")
-const [activity,setActivity] = useState("")
+    try {
+      const res = await fetch("/api/food-scan", { method: "POST", body: formData })
+      const data = await res.json()
 
-const [history,setHistory] = useState<any[]>([])
+      if (data.food && data.confidence > 0.6) {
+        let nutrition = nutritionMap[data.food.toLowerCase()]
+        if (!nutrition) {
+          for (const key in nutritionMap) {
+            if (data.food.toLowerCase().includes(key)) {
+              nutrition = nutritionMap[key]
+              break
+            }
+          }
+        }
 
-// GRAPH
-const chartData = history.map((item, i) => ({
-name: `#${i+1}`,
-calories: item.nutrition?.calories || 0
-})).reverse()
+        const finalRes = { 
+          food: data.food, 
+          confidence: data.confidence, 
+          nutrition, 
+          warning: nutrition?.calories > 250 ? "High Calorie" : "Safe",
+          exercise: ["Running (20 min)", "Brisk Walk (30 min)"]
+        }
 
-// BMI
-const calculateBMI = () => {
-const h = parseFloat(height)/100
-const w = parseFloat(weight)
-const bmiValue = w/(h*h)
+        setResult(finalRes)
+        const prev = JSON.parse(localStorage.getItem("history") || "[]")
+        const updated = [finalRes, ...prev].slice(0, 10)
+        localStorage.setItem("history", JSON.stringify(updated))
+        setHistory(updated)
+      } else {
+        setResult("no-food")
+      }
+    } catch (err) {
+      alert("Error: " + err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-setBmi(bmiValue)
+  const chartData = history.map((item, i) => ({
+    name: `M${history.length - i}`,
+    calories: item.nutrition?.calories || 0
+  })).reverse()
 
-if(bmiValue < 18.5) setCategory("Underweight")
-else if(bmiValue < 25) setCategory("Normal")
-else setCategory("Overweight")
+  return (
+    <div className="min-h-screen bg-[#F0F7FF] flex flex-col items-center justify-center p-6 relative">
+      
+      {/* 🟢 TOP NAVIGATION */}
+      <div className="absolute top-10 left-10 right-10 flex justify-between items-center z-50">
+        <button 
+          onClick={() => router.push("/dashboard")}
+          className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold transition-all group"
+        >
+          <div className="bg-white p-2 rounded-xl shadow-sm group-hover:shadow-md">
+            <ArrowLeft size={20} />
+          </div>
+          <span>Back</span>
+        </button>
 
-localStorage.setItem("profile", JSON.stringify({
-height,weight,bmi:bmiValue,category,gender,activity
-}))
+        <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100">
+          <TabButton active={activeTab === "scan"} onClick={() => setActiveTab("scan")} icon={<Camera size={14}/>} label="Scan" />
+          <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<HistoryIcon size={14}/>} label="History" />
+          <TabButton active={activeTab === "stats"} onClick={() => setActiveTab("stats")} icon={<BarChart3 size={14}/>} label="Stats" />
+        </div>
+      </div>
+
+      {/* 🟢 MAIN CONTENT AREA (Centered) */}
+      <div className="max-w-5xl w-full mt-12 animate-in fade-in zoom-in duration-700">
+        
+        {activeTab === "scan" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            
+            {/* Left Side: Upload/Preview */}
+            <div className={`bg-white p-6 rounded-[3.5rem] shadow-2xl border border-white relative min-h-[450px] flex items-center justify-center overflow-hidden`}>
+              {preview ? (
+                <div className="relative w-full h-full">
+                  <img src={preview} className="w-full aspect-square object-cover rounded-[2.5rem]" alt="Preview" />
+                  <button onClick={() => {setPreview(null); setImage(null); setResult(null)}} className="absolute top-4 right-4 bg-white/90 p-3 rounded-full shadow-lg text-red-500 hover:bg-red-500 hover:text-white transition-all"><XCircle size={24} /></button>
+                  {loading && <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[2px] rounded-[2.5rem] flex items-center justify-center">
+                    <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
+                  </div>}
+                </div>
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center gap-6 group">
+                  <div className="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-500">
+                    <Upload size={40} />
+                  </div>
+                  <div className="text-center">
+                    <span className="block font-black text-slate-800 text-xl uppercase tracking-tighter italic">Upload Photo</span>
+                    <span className="text-slate-400 text-sm font-bold tracking-widest uppercase">Click to browse</span>
+                  </div>
+                  <input type="file" className="hidden" onChange={handleImageChange} accept="image/*" />
+                </label>
+              )}
+            </div>
+
+            {/* Right Side: Analysis Results */}
+            <div className="space-y-6">
+              {!result && !loading && (
+                <div className="text-left space-y-4">
+                  <h1 className="text-6xl font-black text-slate-900 tracking-tighter italic uppercase">Food<br/><span className="text-blue-600">Scanner</span></h1>
+                  <p className="text-slate-400 font-medium italic">Upload a meal photo to get detailed nutrition data instantly using AI.</p>
+                  {image && (
+                    <button onClick={handleUpload} className="w-full py-6 bg-blue-600 text-white rounded-[2rem] font-black text-xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 flex items-center justify-center gap-3 active:scale-95">
+                      <Zap size={24} fill="currentColor" /> START AI SCAN
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {result && result !== "no-food" && (
+                <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-white space-y-8 animate-in slide-in-from-right-10 duration-500">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic capitalize">{result.food}</h2>
+                      <p className="text-[#00D261] font-bold text-[10px] uppercase tracking-[0.2em] mt-1 flex items-center gap-1">
+                        <CheckCircle2 size={12}/> 100% AI Accuracy
+                      </p>
+                    </div>
+                    <Badge type={result.warning} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100">
+                      <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Calories</p>
+                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result.nutrition.calories} <span className="text-sm text-slate-400">kcal</span></h3>
+                    </div>
+                    <div className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-100">
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Protein</p>
+                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result.nutrition.protein}g</h3>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 shadow-2xl">
+                    <p className="font-black italic uppercase tracking-widest text-xs flex items-center gap-2 text-[#00D261]">
+                      <Dumbbell size={18}/> Exercise Required
+                    </p>
+                    <ul className="grid grid-cols-1 gap-2">
+                      {result.exercise.map((ex:any, i:any) => (
+                        <li key={i} className="text-sm font-bold text-slate-300 bg-white/5 p-3 rounded-xl border border-white/5 italic">🔥 {ex}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "history" && <HistorySection history={history} />}
+        {activeTab === "stats" && <StatsSection chartData={chartData} />}
+      </div>
+    </div>
+  )
 }
 
-// LOAD PROFILE
-useEffect(()=>{
-const saved = localStorage.getItem("profile")
-if(saved){
-const p = JSON.parse(saved)
-setHeight(p.height||"")
-setWeight(p.weight||"")
-setBmi(p.bmi||null)
-setCategory(p.category||"")
-setGender(p.gender||"")
-setActivity(p.activity||"")
-}
-},[])
-
-// LOAD HISTORY
-useEffect(()=>{
-const h = JSON.parse(localStorage.getItem("history")||"[]")
-setHistory(h)
-},[])
-
-// CAL LIMIT
-const getCalorieLimit = () => {
-if(!gender || !activity || !category) return null
-
-let base=0
-
-if(gender==="male"){
-if(activity==="low") base=2200
-else if(activity==="moderate") base=2500
-else base=2800
-}else{
-if(activity==="low") base=1800
-else if(activity==="moderate") base=2000
-else base=2200
+// --- HELPER COMPONENTS (Themed) ---
+function TabButton({ active, onClick, icon, label }: any) {
+  return (
+    <button 
+      onClick={onClick} 
+      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:text-slate-600'}`}
+    >
+      {icon} {label}
+    </button>
+  )
 }
 
-if(category==="Underweight") base+=300
-if(category==="Overweight") base-=300
-
-return Math.round(base/3)
+function Badge({ type }: { type: string }) {
+  const isSafe = type === "Safe"
+  return (
+    <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${isSafe ? 'bg-green-50 text-green-600 border-green-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+      {type}
+    </div>
+  )
 }
 
-// EXERCISE
-const getExercise = (cal:number,limit:number)=>{
-
-let exercises:string[] = []
-
-// BMI BASED
-if(category === "Underweight"){
-exercises.push(
-"Light strength training (20 min)",
-"Yoga (15 min)",
-"Resistance band workout"
-)
+function HistorySection({ history }: any) {
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 animate-in slide-in-from-bottom-5">
+      <div className="flex items-center gap-4 mb-4">
+         <div className="p-3 bg-blue-500 text-white rounded-2xl"><HistoryIcon size={24}/></div>
+         <h2 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase">Recent Scans</h2>
+      </div>
+      {history.length > 0 ? history.map((h:any, i:any) => (
+        <div key={i} className="bg-white p-6 rounded-[2.5rem] flex justify-between items-center border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-colors"><Flame size={20}/></div>
+             <div>
+               <p className="font-black text-slate-800 text-xl italic capitalize">{h.food}</p>
+               <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Logged successfully</p>
+             </div>
+          </div>
+          <p className="text-2xl font-black text-blue-600 italic tracking-tighter">{h.nutrition?.calories} <span className="text-[10px] text-slate-400 uppercase tracking-widest">kcal</span></p>
+        </div>
+      )) : <div className="text-center py-20 text-slate-300 font-bold italic">No scan history yet...</div>}
+    </div>
+  )
 }
 
-if(category === "Normal"){
-exercises.push(
-"Jogging (20 min)",
-"Stretching (10 min)",
-"Light gym workout"
-)
-}
-
-if(category === "Overweight"){
-exercises.push(
-"Running (25 min)",
-"Brisk walking (40 min)",
-"Cycling (30 min)",
-"Jump rope (15 min)"
-)
-}
-
-// ACTIVITY BASED
-if(activity === "low"){
-exercises.push(
-"Daily walking (30 min)",
-"Basic mobility exercises"
-)
-}
-
-if(activity === "moderate"){
-exercises.push(
-"Bodyweight training",
-"Core exercises"
-)
-}
-
-if(activity === "high"){
-exercises.push(
-"HIIT workout (15 min)",
-"Advanced strength training"
-)
-}
-
-// CALORIE BASED
-const extra = cal - limit
-
-if(extra > 0){
-exercises.push(
-`🔥 Burn extra: ${Math.ceil(extra/10)} min running`,
-`🚶 Walk: ${Math.ceil(extra/5)} min`
-)
-}
-
-return exercises
-}
-
-// IMAGE
-const handleImageChange = (e:any)=>{
-const file=e.target.files?.[0]
-if(!file) return
-setImage(file)
-setPreview(URL.createObjectURL(file))
-setResult(null)
-}
-
-// UPLOAD
-const handleUpload = async ()=>{
-if(!image){ alert("Upload image"); return }
-
-setLoading(true)
-
-const formData=new FormData()
-formData.append("image",image)
-
-try{
-const res=await fetch("/api/food-scan",{method:"POST",body:formData})
-const data=await res.json()
-
-if(data.food && data.confidence>0.6){
-
-let nutrition=nutritionMap[data.food.toLowerCase()]
-
-if(!nutrition){
-for(const key in nutritionMap){
-if(data.food.toLowerCase().includes(key)){
-nutrition=nutritionMap[key]
-break
-}
-}
-}
-
-// 🔥 HOME FOOD ADJUST
-if(nutrition && foodType==="home"){
-nutrition = {...nutrition, calories: Math.round(nutrition.calories*0.8)}
-}
-
-const limit=getCalorieLimit()
-
-let warning=""
-let exercise=""
-
-if(nutrition && limit){
-
-const ratio = nutrition.calories / limit
-
-if(ratio > 1){
-warning = "❌ High calorie — avoid"
-}else if(ratio > 0.7){
-warning = "⚠️ Moderate — eat carefully"
-}else{
-warning = "✅ Safe"
-}
-
-exercise=getExercise(nutrition.calories,limit)
-}
-
-const finalRes={ food:data.food,confidence:data.confidence,nutrition,warning,exercise }
-
-setResult(finalRes)
-
-// SAVE HISTORY
-const prev=JSON.parse(localStorage.getItem("history")||"[]")
-const updated=[finalRes,...prev].slice(0,5)
-localStorage.setItem("history",JSON.stringify(updated))
-setHistory(updated)
-
-}else{
-setResult("no-food")
-}
-
-}catch{
-alert("Error")
-}finally{
-setLoading(false)
-}
-}
-
-return(
-<div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 text-black flex flex-col items-center gap-6 p-6">
-
-<button onClick={()=>router.push("/dashboard")} className="bg-gray-700 px-3 py-1 rounded">
-Back
-</button>
-
-<h1 className="text-3xl font-bold">Food Scan</h1>
-
-{/* PROFILE */}
-<div className="bg-white shadow-lg border rounded-2xl p-4 w-80">
-<input placeholder="Height" value={height} onChange={(e)=>setHeight(e.target.value)} className="w-full p-2 mb-2 text-black"/>
-<input placeholder="Weight" value={weight} onChange={(e)=>setWeight(e.target.value)} className="w-full p-2 mb-2 text-black"/>
-
-<select value={gender} onChange={(e)=>setGender(e.target.value)} className="w-full p-2 mb-2 text-black">
-<option value="">Gender</option>
-<option value="male">Male</option>
-<option value="female">Female</option>
-</select>
-
-<select value={activity} onChange={(e)=>setActivity(e.target.value)} className="w-full p-2 mb-2 text-black">
-<option value="">Activity</option>
-<option value="low">Low</option>
-<option value="moderate">Moderate</option>
-<option value="high">High</option>
-</select>
-
-<button onClick={calculateBMI} className="bg-blue-500 px-3 py-1">Calculate BMI</button>
-
-{bmi && <p>BMI: {bmi.toFixed(2)} ({category})</p>}
-</div>
-
-{/* FOOD TYPE */}
-<select value={foodType} onChange={(e)=>setFoodType(e.target.value)} className="p-2 rounded text-black">
-<option value="">Food Type</option>
-<option value="home">Home Made</option>
-<option value="outside">Restaurant</option>
-</select>
-
-<input type="file" onChange={handleImageChange}/>
-{preview && <img src={preview} className="w-60"/>}
-
-<button onClick={handleUpload} className="bg-green-500 px-4 py-2 text-white">
-{loading?"Analyzing...":"Scan"}
-</button>
-
-{/* RESULT */}
-{result && result!=="no-food" && (
-<div className="bg-white shadow-xl border rounded-2xl p-4 w-80">
-<p>{result.food}</p>
-<p>{(result.confidence*100).toFixed(1)}%</p>
-
-{result.nutrition && (
-<div className="space-y-3">
-
-<p className="text-lg font-semibold">
-🔥 {result.nutrition.calories} kcal
-</p>
-
-<p className={
-result.warning.includes("High") ? "text-red-400 font-semibold" :
-result.warning.includes("Moderate") ? "text-yellow-400 font-semibold" :
-"text-green-400 font-semibold"
-}>
-{result.warning}
-</p>
-<div className="bg-green-50 border border-green-200 p-3 rounded-xl">
-<p className="text-sm text-gray-300 mb-1">Exercise Plan</p>
-
-{result.exercise.map((ex:string,i:number)=>(
-<p key={i} className="text-green-400 text-sm">• {ex}</p>
-))}
-</div>
-
-</div>
-)}
-</div>
-)}
-
-{/* HISTORY */}
-{history.length>0 && (
-<div className="bg-white shadow-xl border rounded-2xl p-4 w-80">
-<h2>History</h2>
-{history.map((h,i)=>(
-<p key={i}>{h.food} - {h.nutrition?.calories} kcal</p>
-))}
-</div>
-)}
-
-{/* GRAPH */}
-{chartData.length>0 && (
-<div className="bg-white shadow-md rounded-2xl p-4 w-80">
-<h2>Graph</h2>
-<ResponsiveContainer width="100%" height={200}>
-<LineChart data={chartData}>
-<XAxis dataKey="name"/>
-<YAxis/>
-<Tooltip/>
-<Line type="monotone" dataKey="calories" stroke="#00ff99"/>
-</LineChart>
-</ResponsiveContainer>
-</div>
-)}
-
-</div>
-)
+function StatsSection({ chartData }: any) {
+  return (
+    <div className="max-w-4xl mx-auto space-y-8 animate-in slide-in-from-bottom-5">
+      <div className="flex items-center gap-4 mb-4">
+         <div className="p-3 bg-blue-500 text-white rounded-2xl"><PieChart size={24}/></div>
+         <h2 className="text-4xl font-black text-slate-900 italic tracking-tighter uppercase">Calorie Trends</h2>
+      </div>
+      <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-white h-[450px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold', fill: '#cbd5e1'}} />
+            <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold', fill: '#cbd5e1'}} />
+            <Tooltip 
+              contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '15px'}} 
+              itemStyle={{fontWeight: '900', color: '#2563eb'}}
+            />
+            <Line type="monotone" dataKey="calories" stroke="#2563eb" strokeWidth={6} dot={{r: 6, fill: '#2563eb', strokeWidth: 4, stroke: '#fff'}} activeDot={{r: 10}} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
 }

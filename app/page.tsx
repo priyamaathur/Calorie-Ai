@@ -1,40 +1,33 @@
 "use client"
 
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
 
-export default function Home() {
+export default function RootPage() {
+  const router = useRouter()
 
-const router = useRouter()
+  useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
 
-return (
-<div className="min-h-screen flex flex-col items-center justify-center bg-black text-white">
+      if (!session) {
+        // Agar login nahi hai toh Login page par bhejo
+        router.push("/login")
+      } else {
+        // Agar login mil gaya, toh hamesha DASHBOARD par bhejo
+        router.push("/dashboard")
+      }
+    }
+    checkUser()
+  }, [router])
 
-<h1 className="text-4xl font-bold mb-4">
-Calorie AI
-</h1>
-
-<p className="text-gray-400 mb-8">
-Your Smart Health Assistant
-</p>
-
-<div className="flex flex-col gap-4">
-
-<button
-onClick={() => router.push("/dashboard")}
-className="bg-green-500 px-6 py-2 rounded-lg text-lg hover:bg-green-600"
->
-Continue as Guest
-</button>
-
-<button
-onClick={() => router.push("/login")}
-className="bg-gray-700 px-6 py-2 rounded-lg text-lg hover:bg-gray-600"
->
-Login
-</button>
-
-</div>
-
-</div>
-)
+  return (
+    <div className="h-screen flex items-center justify-center bg-white">
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-12 h-12 border-4 border-green-500/20 border-t-green-500 rounded-full animate-spin" />
+        <p className="text-slate-400 font-bold animate-pulse">Loading CalorieAI...</p>
+      </div>
+    </div>
+  )
 }
