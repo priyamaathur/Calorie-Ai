@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
 import { 
   Camera, Upload, ArrowLeft, Zap, 
   Flame, Dumbbell, History as HistoryIcon, 
@@ -77,21 +78,37 @@ export default function ScanPage() {
         const finalRes = { 
           food: data.food, 
           confidence: data.confidence, 
-          nutrition, 
-          warning: nutrition?.calories > 250 ? "High Calorie" : "Safe",
+          nutrition: nutrition || { calories: 0, protein: 1, carbs: 1 }, 
+          warning: (nutrition?.calories || 0) > 250 ? "High Calorie" : "Safe",
           exercise: ["Running (20 min)", "Brisk Walk (30 min)"]
         }
 
         setResult(finalRes)
+
+        // 🟢 SAVE TO SUPABASE
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await supabase.from("history").insert([
+            { 
+              user_id: user.id, 
+              food_name: data.food, 
+              nutrition: nutrition || { calories: 0, protein: 0, carbs: 0 }
+            }
+          ])
+        }
+
+        // 🟢 SAVE TO LOCAL STORAGE
         const prev = JSON.parse(localStorage.getItem("history") || "[]")
         const updated = [finalRes, ...prev].slice(0, 10)
         localStorage.setItem("history", JSON.stringify(updated))
         setHistory(updated)
+
       } else {
         setResult("no-food")
       }
     } catch (err) {
-      alert("Error: " + err)
+      console.error("Scan Error:", err)
+      alert("Error: Python server connect nahi ho raha!")
     } finally {
       setLoading(false)
     }
@@ -104,19 +121,11 @@ export default function ScanPage() {
 
   return (
     <div className="min-h-screen bg-[#F0F7FF] flex flex-col items-center justify-center p-6 relative">
-      
-      {/* 🟢 TOP NAVIGATION */}
       <div className="absolute top-10 left-10 right-10 flex justify-between items-center z-50">
-        <button 
-          onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold transition-all group"
-        >
-          <div className="bg-white p-2 rounded-xl shadow-sm group-hover:shadow-md">
-            <ArrowLeft size={20} />
-          </div>
+        <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-slate-400 hover:text-blue-600 font-bold transition-all group">
+          <div className="bg-white p-2 rounded-xl shadow-sm group-hover:shadow-md"><ArrowLeft size={20} /></div>
           <span>Back</span>
         </button>
-
         <div className="flex bg-white p-1.5 rounded-2xl shadow-sm border border-slate-100">
           <TabButton active={activeTab === "scan"} onClick={() => setActiveTab("scan")} icon={<Camera size={14}/>} label="Scan" />
           <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")} icon={<HistoryIcon size={14}/>} label="History" />
@@ -124,27 +133,19 @@ export default function ScanPage() {
         </div>
       </div>
 
-      {/* 🟢 MAIN CONTENT AREA (Centered) */}
       <div className="max-w-5xl w-full mt-12 animate-in fade-in zoom-in duration-700">
-        
         {activeTab === "scan" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            
-            {/* Left Side: Upload/Preview */}
             <div className={`bg-white p-6 rounded-[3.5rem] shadow-2xl border border-white relative min-h-[450px] flex items-center justify-center overflow-hidden`}>
               {preview ? (
                 <div className="relative w-full h-full">
                   <img src={preview} className="w-full aspect-square object-cover rounded-[2.5rem]" alt="Preview" />
                   <button onClick={() => {setPreview(null); setImage(null); setResult(null)}} className="absolute top-4 right-4 bg-white/90 p-3 rounded-full shadow-lg text-red-500 hover:bg-red-500 hover:text-white transition-all"><XCircle size={24} /></button>
-                  {loading && <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[2px] rounded-[2.5rem] flex items-center justify-center">
-                    <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
-                  </div>}
+                  {loading && <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[2px] rounded-[2.5rem] flex items-center justify-center"><div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" /></div>}
                 </div>
               ) : (
                 <label className="cursor-pointer flex flex-col items-center gap-6 group">
-                  <div className="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-500">
-                    <Upload size={40} />
-                  </div>
+                  <div className="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform duration-500"><Upload size={40} /></div>
                   <div className="text-center">
                     <span className="block font-black text-slate-800 text-xl uppercase tracking-tighter italic">Upload Photo</span>
                     <span className="text-slate-400 text-sm font-bold tracking-widest uppercase">Click to browse</span>
@@ -154,7 +155,6 @@ export default function ScanPage() {
               )}
             </div>
 
-            {/* Right Side: Analysis Results */}
             <div className="space-y-6">
               {!result && !loading && (
                 <div className="text-left space-y-4">
@@ -173,36 +173,31 @@ export default function ScanPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic capitalize">{result.food}</h2>
-                      <p className="text-[#00D261] font-bold text-[10px] uppercase tracking-[0.2em] mt-1 flex items-center gap-1">
-                        <CheckCircle2 size={12}/> 100% AI Accuracy
-                      </p>
+                      <p className="text-[#00D261] font-bold text-[10px] uppercase tracking-[0.2em] mt-1 flex items-center gap-1"><CheckCircle2 size={12}/> 100% AI Accuracy</p>
                     </div>
                     <Badge type={result.warning} />
                   </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100">
                       <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Calories</p>
-                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result.nutrition.calories} <span className="text-sm text-slate-400">kcal</span></h3>
+                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result?.nutrition?.calories ?? 0} <span className="text-sm text-slate-400">kcal</span></h3>
                     </div>
                     <div className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-100">
                       <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Protein</p>
-                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result.nutrition.protein}g</h3>
+                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter">{result?.nutrition?.protein ?? 0}g</h3>
                     </div>
                   </div>
-
                   <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 shadow-2xl">
-                    <p className="font-black italic uppercase tracking-widest text-xs flex items-center gap-2 text-[#00D261]">
-                      <Dumbbell size={18}/> Exercise Required
-                    </p>
+                    <p className="font-black italic uppercase tracking-widest text-xs flex items-center gap-2 text-[#00D261]"><Dumbbell size={18}/> Exercise Required</p>
                     <ul className="grid grid-cols-1 gap-2">
-                      {result.exercise.map((ex:any, i:any) => (
+                      {result?.exercise?.map((ex:any, i:any) => (
                         <li key={i} className="text-sm font-bold text-slate-300 bg-white/5 p-3 rounded-xl border border-white/5 italic">🔥 {ex}</li>
                       ))}
                     </ul>
                   </div>
                 </div>
               )}
+              {result === "no-food" && <div className="p-10 bg-white rounded-[3rem] text-center font-bold text-red-500 border border-red-50">❌ Food not recognized. Try another photo.</div>}
             </div>
           </div>
         )}
@@ -214,13 +209,9 @@ export default function ScanPage() {
   )
 }
 
-// --- HELPER COMPONENTS (Themed) ---
 function TabButton({ active, onClick, icon, label }: any) {
   return (
-    <button 
-      onClick={onClick} 
-      className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:text-slate-600'}`}
-    >
+    <button onClick={onClick} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 ${active ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-400 hover:text-slate-600'}`}>
       {icon} {label}
     </button>
   )
@@ -271,10 +262,7 @@ function StatsSection({ chartData }: any) {
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold', fill: '#cbd5e1'}} />
             <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 'bold', fill: '#cbd5e1'}} />
-            <Tooltip 
-              contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '15px'}} 
-              itemStyle={{fontWeight: '900', color: '#2563eb'}}
-            />
+            <Tooltip contentStyle={{borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', padding: '15px'}} itemStyle={{fontWeight: '900', color: '#2563eb'}} />
             <Line type="monotone" dataKey="calories" stroke="#2563eb" strokeWidth={6} dot={{r: 6, fill: '#2563eb', strokeWidth: 4, stroke: '#fff'}} activeDot={{r: 10}} />
           </LineChart>
         </ResponsiveContainer>

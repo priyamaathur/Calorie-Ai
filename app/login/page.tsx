@@ -1,23 +1,43 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Activity, Sparkles, UserCircle, Mail, Lock, ArrowRight } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function LoginPage() {
   const router = useRouter()
 
-  // 🔵 Asli User ke liye login handle
-  const handleLogin = (e: React.FormEvent) => {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
+
+  // 🔵 REAL LOGIN (Supabase + old role logic safe)
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Jab koi account se login karega, hum role 'user' set karenge
+    setLoading(true)
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      alert(error.message)
+      setLoading(false)
+      return
+    }
+
+    // 👇 OLD LOGIC PRESERVED
     localStorage.setItem("userRole", "user")
+
+    setLoading(false)
     router.push("/dashboard")
   }
 
-  // 🟡 Guest User ke liye handle
+  // 🟡 Guest mode (UNCHANGED)
   const handleGuestEntry = () => {
-    // Guest ke liye role 'guest' set karenge taaki stats hide ho jayein
     localStorage.setItem("userRole", "guest")
     router.push("/dashboard")
   }
@@ -52,9 +72,11 @@ export default function LoginPage() {
             <Mail className="absolute left-5 top-5 text-slate-300" size={18} />
             <input 
               required
-              type="email" 
-              placeholder="Email" 
-              className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl outline-none focus:ring-2 focus:ring-[#00D261]/20 transition-all font-medium text-slate-700" 
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl outline-none focus:ring-2 focus:ring-[#00D261]/20 transition-all font-medium text-slate-700"
             />
           </div>
           
@@ -62,17 +84,20 @@ export default function LoginPage() {
             <Lock className="absolute left-5 top-5 text-slate-300" size={18} />
             <input 
               required
-              type="password" 
-              placeholder="Password" 
-              className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl outline-none focus:ring-2 focus:ring-[#00D261]/20 transition-all font-medium text-slate-700" 
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl outline-none focus:ring-2 focus:ring-[#00D261]/20 transition-all font-medium text-slate-700"
             />
           </div>
 
           <button 
             type="submit"
+            disabled={loading}
             className="w-full bg-[#1A1F2C] text-white py-5 rounded-[2rem] font-black shadow-xl hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
           >
-            Login Now <ArrowRight size={18} />
+            {loading ? "Logging in..." : "Login Now"} <ArrowRight size={18} />
           </button>
         </form>
 
@@ -99,9 +124,9 @@ export default function LoginPage() {
         </div>
       </motion.div>
 
-      {/* Decorative Blurs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/30 rounded-full blur-[120px] -z-0" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-green-100/30 rounded-full blur-[120px] -z-0" />
+      {/* Background blur */}
+      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-200/30 rounded-full blur-[120px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-green-100/30 rounded-full blur-[120px]" />
     </div>
   )
 }

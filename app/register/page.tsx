@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabaseClient" // 👈 Check your path
+import { supabase } from "@/lib/supabaseClient"
 import { motion } from "framer-motion"
 import { Activity, Sparkles, ArrowLeft, User, Mail, Lock, UserPlus, Loader2 } from "lucide-react"
 
@@ -23,33 +23,34 @@ export default function RegisterPage() {
     setError("")
 
     try {
-      // 1. Supabase Signup
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // STEP 1: Signup
+      const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-          }
-        }
       })
 
-      if (signUpError) throw signUpError
+      if (error) throw error
 
+      // STEP 2: Save Name (IMPORTANT FIX)
       if (data?.user) {
-        // 2. Setting Role to 'user' so Dashboard shows everything
-        localStorage.setItem("userRole", "user")
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: {
+            full_name: formData.fullName,
+          },
+        })
 
-        // 3. Simple trick: Signup ke baad thoda wait karke redirect
-        // Taaki Supabase session settle ho jaye
-        setTimeout(() => {
-          router.push("/dashboard")
-          router.refresh() // 👈 Page refresh taaki naya session detect ho
-        }, 1000)
+        if (updateError) throw updateError
       }
 
+      // Keep your old logic safe
+      localStorage.setItem("userRole", "user")
+
+      alert("Signup successful! Please login.")
+      router.push("/login")
+
     } catch (err: any) {
-      setError(err.message || "Something went wrong. Try again.")
+      setError(err.message || "Something went wrong")
+    } finally {
       setLoading(false)
     }
   }
@@ -57,85 +58,65 @@ export default function RegisterPage() {
   return (
     <div style={{ backgroundColor: '#E1EFFF' }} className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
       
-      {/* BACK BUTTON */}
       <button 
         onClick={() => router.push("/login")} 
-        className="fixed top-8 left-8 z-[100] flex items-center gap-2 bg-white px-5 py-3 rounded-2xl text-slate-600 font-bold shadow-md border border-white hover:bg-slate-50 transition-all"
+        className="fixed top-8 left-8 flex items-center gap-2 bg-white px-5 py-3 rounded-2xl shadow"
       >
-        <ArrowLeft size={18} /> Back to Login
+        <ArrowLeft size={18} /> Back
       </button>
 
-      <motion.div 
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-white p-10 md:p-12 rounded-[3.5rem] shadow-2xl w-full max-w-[500px] text-center border border-white relative z-10"
-      >
-        {/* BRANDING */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="bg-[#00D261] p-3 rounded-2xl text-white shadow-lg mb-4">
-            <Activity size={32} strokeWidth={3} />
-          </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Calorie <span className="text-[#00D261] italic">Ai</span></h1>
+      <motion.div className="bg-white p-10 rounded-[3rem] shadow-xl w-full max-w-[450px] text-center">
+        
+        <div className="mb-6">
+          <Activity size={32} className="mx-auto text-green-500" />
+          <h1 className="text-2xl font-bold">Calorie Ai</h1>
         </div>
 
-        <h2 className="text-xl font-black text-slate-800 mb-2 italic uppercase">Create Account</h2>
-        <p className="text-slate-400 font-bold text-sm mb-6 uppercase tracking-widest flex items-center justify-center gap-2">
-           <Sparkles size={14} className="text-[#00D261]" /> Start Your Journey
-        </p>
+        {error && <p className="text-red-500 mb-3">{error}</p>}
 
-        {/* ERROR MESSAGE */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 text-red-500 rounded-2xl text-sm font-bold border border-red-100">
-            {error}
-          </div>
-        )}
+        <form onSubmit={handleRegister} className="space-y-4">
 
-        <form onSubmit={handleRegister} className="space-y-4 text-left">
-          <div className="relative group">
-             <User className="absolute left-5 top-5 text-slate-300" size={20} />
-             <input 
-               required
-               type="text" 
-               placeholder="Full Name" 
-               onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-               className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl text-slate-700 focus:ring-2 focus:ring-[#00D261]/20 outline-none font-medium transition-all"
-             />
-          </div>
+          <input
+            type="text"
+            placeholder="Full Name"
+            required
+            autoComplete="off"
+            onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+            className="w-full p-4 border rounded-xl"
+          />
 
-          <div className="relative group">
-             <Mail className="absolute left-5 top-5 text-slate-300" size={20} />
-             <input 
-               required
-               type="email" 
-               placeholder="Email Address" 
-               onChange={(e) => setFormData({...formData, email: e.target.value})}
-               className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl text-slate-700 focus:ring-2 focus:ring-[#00D261]/20 outline-none font-medium transition-all"
-             />
-          </div>
+          <input
+            type="email"
+            placeholder="Email"
+            required
+            autoComplete="off"
+            onChange={(e) => setFormData({...formData, email: e.target.value})}
+            className="w-full p-4 border rounded-xl"
+          />
 
-          <div className="relative group">
-             <Lock className="absolute left-5 top-5 text-slate-300" size={20} />
-             <input 
-               required
-               type="password" 
-               placeholder="Password (min 6 chars)" 
-               onChange={(e) => setFormData({...formData, password: e.target.value})}
-               className="w-full bg-[#F5F9FF] p-5 pl-14 rounded-2xl text-slate-700 focus:ring-2 focus:ring-[#00D261]/20 outline-none font-medium transition-all"
-             />
-          </div>
+          <input
+            type="password"
+            placeholder="Password"
+            required
+            autoComplete="new-password"
+            onChange={(e) => setFormData({...formData, password: e.target.value})}
+            className="w-full p-4 border rounded-xl"
+          />
 
-          <button 
+          <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#1A1F2C] text-white py-5 rounded-[2rem] font-black text-lg shadow-xl mt-4 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70 transition-all"
+            className="w-full bg-black text-white py-4 rounded-xl flex items-center justify-center gap-2"
           >
-            {loading ? <Loader2 className="animate-spin" /> : <><UserPlus size={20} /> Sign Up Now</>}
+            {loading ? <Loader2 className="animate-spin" /> : <><UserPlus size={18}/> Sign Up</>}
           </button>
         </form>
 
-        <p className="mt-8 text-slate-400 font-bold text-sm">
+        <p className="mt-4">
           Already have an account?{" "}
-          <button onClick={() => router.push("/login")} className="text-[#00D261] hover:underline font-black">Login</button>
+          <button onClick={() => router.push("/login")} className="text-green-600">
+            Login
+          </button>
         </p>
       </motion.div>
     </div>

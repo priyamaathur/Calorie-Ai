@@ -1,181 +1,141 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { motion, AnimatePresence } from "framer-motion"
+import { quotes } from "../motivational thoughts/quote"
 import { 
   Plus, Target, Utensils, Dumbbell, ChevronRight, 
-  Bell, MessageSquare, Menu, User, LogOut, Activity, Zap, Settings, Sparkles, UserPlus
-} from "lucide-react"
+  Menu, User, LogOut, Activity, Settings, 
+  Bell, MessageSquare, Sun, Moon, Camera, 
+  ClipboardList, FileText, Tag, Search 
+} from "lucide-react";
 
 export default function DashboardPage() {
   const router = useRouter()
+  
+  // --- States ---
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [consumedCalories, setConsumedCalories] = useState(0)
   const [loading, setLoading] = useState(true)
   const [showMenu, setShowMenu] = useState(false)
-  const [showToast, setShowToast] = useState(false)
   const [isGuest, setIsGuest] = useState(false)
+  const [displayName, setDisplayName] = useState("User")
+  const [randomQuote, setRandomQuote] = useState("")
+  const [waterGlasses, setWaterGlasses] = useState(0)
+  const [stepsCount, setStepsCount] = useState(6432)
 
   const DAILY_GOAL = 2000 
 
   useEffect(() => {
+    const selected = quotes[Math.floor(Math.random() * quotes.length)];
+    setRandomQuote(selected);
+    
     const fetchDashboardData = async () => {
       try {
         const role = localStorage.getItem("userRole")
-        
-        // 1. Guest Check
         if (role === "guest") {
-          setIsGuest(true)
-          setConsumedCalories(0) // Guest starts fresh
-          setLoading(false)
-          setTimeout(() => setShowToast(true), 1000)
-          return
+          setIsGuest(true); setDisplayName("Guest"); setLoading(false);
+          return;
         }
-
-        // 2. Real User Session Check
+        
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) { router.push("/login"); return }
-
-        // 3. Fetch User Profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single()
-        setProfile(profileData)
-
-        // 4. 🔴 FETCH HISTORY FROM SUPABASE (Fixes old data showing up)
-        const { data: historyData, error: historyError } = await supabase
-          .from("history")
-          .select("nutrition")
-          .eq("user_id", user.id)
-
-        if (!historyError && historyData) {
-          const total = historyData.reduce((sum: number, item: any) => {
-            // Check if nutrition is string or object
-            const nutrition = typeof item.nutrition === 'string' 
-              ? JSON.parse(item.nutrition) 
-              : item.nutrition;
-            return sum + (Number(nutrition?.calories) || 0)
-          }, 0)
-          setConsumedCalories(total)
-        } else {
-          setConsumedCalories(0) 
+        if (!user) { 
+          window.location.href = "/login"; 
+          return; 
         }
 
-        setTimeout(() => setShowToast(true), 1000)
-        setTimeout(() => setShowToast(false), 6000)
+        const { data: profileData } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+        setProfile(profileData)
+        const nameFromMeta = user.user_metadata?.full_name || user.email?.split('@')[0] || "User"
+        setDisplayName(profileData?.full_name?.split(' ')[0] || nameFromMeta.split(' ')[0])
 
-      } catch (err) {
-        console.error("Dashboard Loading Error:", err)
-      } finally {
-        setLoading(false)
+        const { data: historyData } = await supabase.from("history").select("nutrition").eq("user_id", user.id)
+        
+        if (historyData && historyData.length > 0) {
+          const total = historyData.reduce((sum: number, item: any) => {
+            try {
+              const nutrition = typeof item.nutrition === 'string' 
+                ? JSON.parse(item.nutrition) 
+                : item.nutrition;
+
+              const cal = nutrition?.calories || 
+                          nutrition?.Calories || 
+                          nutrition?.total_calories || 
+                          nutrition?.total_cal || 
+                          nutrition?.kcal || 0;
+              
+              return sum + Number(cal);
+            } catch (e) {
+              return sum;
+            }
+          }, 0);
+          
+          setConsumedCalories(Math.round(total));
+        }
+      } catch (err) { 
+        console.error("Dashboard error:", err) 
+      } finally { 
+        setLoading(false) 
       }
     }
+
     fetchDashboardData()
-  }, [router])
+  }, []); 
 
-  // 🔴 FIXED LOGOUT: Clears everything
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    localStorage.clear() // Deletes history, userRole, etc.
-    router.push("/login")
-  }
-
-  const progressPercent = Math.min((consumedCalories / DAILY_GOAL) * 100, 100)
-
-  const containerVars = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
-  }
-
-  const itemVars = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+    await supabase.auth.signOut(); 
+    localStorage.clear(); 
+    window.location.href = "/login";
   }
 
   if (loading) return (
-    <div style={{ backgroundColor: '#E1EFFF' }} className="min-h-screen flex items-center justify-center">
-      <motion.div 
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ duration: 1, repeat: Infinity }}
-        className="bg-[#00D261] p-4 rounded-2xl shadow-2xl shadow-green-500/30"
-      >
-        <Activity className="text-white" size={32} />
-      </motion.div>
+    <div style={{ backgroundColor: isDarkMode ? '#0F172A' : '#E1EFFF' }} className="min-h-screen flex items-center justify-center">
+      <Activity className="animate-spin text-[#00D261]" size={40} />
     </div>
   )
 
   return (
-    <div style={{ backgroundColor: '#E1EFFF', minHeight: '100vh' }} className="text-slate-900 font-sans pb-10 overflow-x-hidden">
+    <div 
+      style={{ 
+        backgroundColor: isDarkMode ? '#0F172A' : '#E1EFFF', 
+        minHeight: '100vh',
+        transition: 'background-color 0.4s ease'
+      }} 
+      className={`${isDarkMode ? 'text-white' : 'text-slate-900'} font-sans pb-10 overflow-x-hidden`}
+    >
       
-      <AnimatePresence>
-        {showToast && (
-          <motion.div 
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 20, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-0 right-0 z-[200] flex justify-center px-6 pointer-events-none"
-          >
-            <div className="bg-[#1A1F2C] text-white px-6 py-3 rounded-full shadow-2xl border border-white/10 flex items-center gap-3 pointer-events-auto">
-              <div className="bg-[#00D261] p-1 rounded-full">
-                <Sparkles size={14} className="text-white" />
-              </div>
-              <p className="text-sm font-bold tracking-tight">
-                Calorie Ai - <span className="text-slate-400 font-medium italic">{isGuest ? "Guest Mode Active" : "Your Health Buddy"}</span>
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      {/* 🟢 HEADER */}
       <motion.header 
-        initial={{ y: -100 }} animate={{ y: 0 }}
-        className="w-full bg-white/95 backdrop-blur-md border-b border-blue-100 px-6 py-4 flex items-center justify-between sticky top-0 z-[100] shadow-sm"
+        initial={{ y: -50 }} animate={{ y: 0 }}
+        className={`${isDarkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white/95 border-blue-100'} w-full backdrop-blur-md border-b px-6 py-4 flex items-center justify-between sticky top-0 z-[100] shadow-sm`}
       >
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push("/dashboard")}>
-          <motion.div whileHover={{ rotate: 15 }} className="bg-[#00D261] p-1.5 rounded-lg text-white shadow-lg">
-            <Activity size={22} strokeWidth={3} />
-          </motion.div>
-          <span className="text-xl font-black tracking-tight text-slate-900">
-            Calorie <span className="text-[#00D261]">Ai</span>
-          </span>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.href = "/dashboard"}>
+          <div className="bg-[#00D261] p-1.5 rounded-lg text-white shadow-lg"><Activity size={22} /></div>
+          <span className="text-xl font-black italic">Calorie <span className="text-[#00D261]">Ai</span></span>
         </div>
 
         <div className="flex items-center gap-2 md:gap-3">
-          <motion.button
-            whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
-            onClick={() => router.push(isGuest ? "/register" : "/profile")}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-slate-500 border border-blue-50 shadow-sm relative"
-          >
-            <User size={20} />
-          </motion.button>
+          {!isGuest && (
+            <>
+              <button onClick={() => window.location.href = "/notifications"} className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-blue-50 text-slate-500'} w-10 h-10 flex items-center justify-center rounded-full border shadow-sm active:scale-90 transition-all cursor-pointer`}><Bell size={18} /></button>
+              <button onClick={() => window.location.href = "/contact"} className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-blue-50 text-slate-500'} w-10 h-10 flex items-center justify-center rounded-full border shadow-sm active:scale-95 transition-all cursor-pointer`}><MessageSquare size={18} /></button>
+              <button onClick={() => window.location.href = "/profile"} className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-blue-50 text-slate-500'} w-10 h-10 flex items-center justify-center rounded-full border shadow-sm active:scale-90 transition-all cursor-pointer`}><User size={20} /></button>
+
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className={`${isDarkMode ? 'bg-yellow-400 text-slate-900' : 'bg-slate-900 text-yellow-400'} w-10 h-10 flex items-center justify-center rounded-full shadow-lg active:scale-90 transition-all transform hover:rotate-12 cursor-pointer`}>
+                {isDarkMode ? <Sun size={18} strokeWidth={3} /> : <Moon size={18} strokeWidth={3} />}
+              </button>
+            </>
+          )}
 
           <div className="relative">
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setShowMenu(!showMenu)} 
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1F2C] text-white shadow-lg"
-            >
-              <Menu size={18} />
-            </motion.button>
+            <button onClick={() => setShowMenu(!showMenu)} className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1F2C] text-white shadow-lg active:scale-90"><Menu size={18} /></button>
             <AnimatePresence>
               {showMenu && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                  className="absolute top-12 right-0 w-52 bg-white rounded-2xl shadow-2xl border border-blue-50 p-2 z-[110]"
-                >
-                  <button onClick={() => router.push(isGuest ? "/register" : "/profile")} className="w-full flex items-center gap-3 p-3 hover:bg-blue-50 rounded-xl text-sm font-bold text-slate-700">
-                    <Settings size={16} className="mr-2" /> {isGuest ? "Create Account" : "Update Profile"}
-                  </button>
-                  <div className="h-px bg-slate-100 my-1" />
-                  <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 hover:bg-red-50 rounded-xl text-sm font-bold text-red-500">
-                    <LogOut size={16} className="mr-2" /> {isGuest ? "Exit" : "Logout"}
-                  </button>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className={`${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-blue-50 text-slate-700'} absolute top-12 right-0 w-52 rounded-2xl shadow-2xl p-2 z-[110] border`}>
+                  <button onClick={() => window.location.href = "/profile"} className="w-full flex items-center gap-3 p-3 hover:bg-opacity-10 hover:bg-blue-400 rounded-xl text-sm font-bold"><Settings size={16} /> Settings</button>
+                  <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 hover:bg-red-500/10 rounded-xl text-sm font-bold text-red-500"><LogOut size={16} /> Logout</button>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -183,110 +143,259 @@ export default function DashboardPage() {
         </div>
       </motion.header>
 
-      <motion.main 
-        variants={containerVars} initial="hidden" animate="visible"
-        className="max-w-6xl mx-auto p-6 space-y-8"
-      >
-        <motion.div variants={itemVars}>
-          <p className="text-blue-600 font-black uppercase tracking-[0.2em] text-[10px]">{isGuest ? "Quick Mode" : "Your Progress"}</p>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 italic">
-            Hey {isGuest ? "Guest! ⚡" : (profile?.full_name?.split(' ')[0] || "User") + "! ⚡"}
-          </h1>
-        </motion.div>
+      <main className="max-w-6xl mx-auto p-6 space-y-8">
+        <h1 className="text-4xl font-black italic">Heyyy {displayName}! ⚡</h1>
 
+        {/* 🟢 DAILY MOTIVATION CARD */}
         <motion.div 
-          variants={itemVars}
-          className="bg-[#1A1F2C] rounded-[3.5rem] p-8 md:p-12 text-white shadow-2xl relative overflow-hidden border border-white/5"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} p-6 rounded-[2rem] shadow-sm relative overflow-hidden border`}
         >
-          <motion.div animate={{ opacity: [0.05, 0.1, 0.05] }} transition={{ duration: 5, repeat: Infinity }} className="absolute top-0 right-0 w-96 h-96 bg-[#00D261] rounded-full blur-[120px] -mr-40 -mt-40" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-            <div className="relative w-44 h-44 flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="88" cy="88" r="75" stroke="#334155" strokeWidth="12" fill="transparent" />
-                <motion.circle 
-                  cx="88" cy="88" r="75" stroke="#00D261" strokeWidth="14" fill="transparent" 
-                  initial={{ strokeDashoffset: 471 }}
-                  animate={{ strokeDashoffset: 471 - (471 * progressPercent) / 100 }}
-                  transition={{ duration: 1.5, ease: "easeOut" }}
-                  strokeDasharray={471} 
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-5xl font-black tabular-nums">{consumedCalories}</span>
-                <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">kcal used</span>
-              </div>
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-6 h-[1.5px] bg-blue-500"></span>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-500 italic">
+                Motivational Thought of the Day!! 
+              </p>
             </div>
-
-            <div className="flex-1 space-y-6 text-center md:text-left">
-              <div>
-                <p className="text-[#00D261] font-black uppercase tracking-[0.2em] text-xs flex items-center justify-center md:justify-start gap-2">
-                  <Zap size={14} fill="#00D261" /> {isGuest ? "Guest Overview" : "Daily Overview"}
-                </p>
-                <h2 className="text-3xl font-bold mt-2 leading-tight">Goal: {DAILY_GOAL} <span className="text-slate-500 font-medium text-lg italic">kcal</span></h2>
-              </div>
-              
-              <motion.button 
-                whileHover={{ scale: 1.05, backgroundColor: "#ffffff", color: "#0f172a" }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => router.push("/scan")} 
-                className="bg-[#00D261] text-slate-900 px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest text-xs transition-all flex items-center gap-2 mx-auto md:mx-0 shadow-2xl shadow-green-500/40"
-              >
-                <Plus size={20} strokeWidth={4} /> Scan New Meal
-              </motion.button>
-            </div>
+            <p className={`${isDarkMode ? 'text-slate-300' : 'text-gray-800'} text-xl font-bold italic leading-tight`}>
+              "{randomQuote || "Loading your daily boost..."}"
+            </p>
           </div>
         </motion.div>
 
-        {!isGuest ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-10">
-            {[
-              { label: "BMI Status", value: profile?.bmi || "24.5", sub: profile?.category || "Normal", icon: Target, color: "text-blue-500", bg: "bg-blue-50", path: null },
-              { label: "Diet Plan", value: "View Plan", sub: "Pro Strategy", icon: Utensils, color: "text-orange-500", bg: "bg-orange-50", path: "/diet" },
-              { label: "Workouts", value: "Exercise", sub: "Daily Routine", icon: Dumbbell, color: "text-purple-500", bg: "bg-purple-50", path: "/exercise" }
-            ].map((item, i) => (
-              <motion.div
-                key={i}
-                variants={itemVars}
-                whileHover={{ y: -8 }}
-                onClick={() => item.path && router.push(item.path)}
-                className="bg-white p-8 rounded-[2.5rem] border border-blue-50 shadow-xl flex items-center justify-between group cursor-pointer shadow-blue-900/5"
-              >
-                <div className="space-y-1 text-left">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
-                  <h3 className="text-2xl font-black text-slate-800 tracking-tight uppercase italic flex items-center gap-1">
-                    {item.value} {item.path && <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />}
-                  </h3>
-                  <div className={`px-3 py-1 ${item.bg} ${item.color} rounded-full text-[10px] font-black uppercase italic border border-blue-100 inline-block`}>{item.sub}</div>
-                </div>
-                <motion.div whileHover={{ rotate: [0, -10, 10, 0] }} className={`w-16 h-16 ${item.bg} ${item.color} rounded-2xl flex items-center justify-center shadow-inner`}>
-                  <item.icon size={32} />
-                </motion.div>
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <motion.div 
-            variants={itemVars}
-            className="bg-white/40 border-4 border-dashed border-blue-100 p-12 rounded-[3.5rem] text-center"
-          >
-            <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-[#00D261]">
-              <Sparkles size={32} />
+        {/* 🟢 PREMIUM PROGRESS CARD (Same as your screenshot) */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} p-10 rounded-[3rem] shadow-sm relative overflow-hidden border`}
+        >
+          <div className="flex flex-col md:flex-row justify-between items-end mb-10 gap-6">
+            <div className="text-left w-full">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-500 italic">
+                  Daily Consumption
+                </p>
+              </div>
+              <h3 className={`${isDarkMode ? 'text-white' : 'text-gray-900'} text-5xl font-black italic tracking-tighter`}>
+                {consumedCalories} <span className="text-lg font-medium text-gray-400 not-italic ml-1">/ {DAILY_GOAL} kcal</span>
+              </h3>
             </div>
-            <h3 className="text-xl font-black text-slate-800 uppercase italic">Unlock Your Full Potential</h3>
-            <p className="text-slate-500 font-bold text-sm max-w-sm mx-auto mt-2">
-              Create an account to track your BMI, personalized Diet Plans, and Meal History.
-            </p>
-            <button 
-              onClick={() => router.push("/register")}
-              className="mt-6 bg-[#1A1F2C] text-white px-8 py-4 rounded-full font-black text-xs uppercase tracking-widest flex items-center gap-2 mx-auto hover:scale-105 transition-all"
-            >
-              <UserPlus size={16} /> Sign Up Now
-            </button>
-          </motion.div>
+            <div className="bg-blue-50 px-6 py-3 rounded-2xl border border-blue-100">
+              <span className="text-3xl font-black italic text-blue-600">
+                {Math.min(Math.round((consumedCalories / DAILY_GOAL) * 100), 100)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="relative h-5 w-full bg-gray-100 rounded-full overflow-hidden shadow-inner">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min((consumedCalories / DAILY_GOAL) * 100, 100)}%` }}
+                transition={{ duration: 1.5, ease: "circOut" }}
+                className={`h-full rounded-full shadow-lg ${consumedCalories > DAILY_GOAL ? 'bg-red-500' : 'bg-gradient-to-r from-blue-600 to-indigo-500'}`}
+              />
+            </div>
+            <div className="flex justify-between px-1">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">Keep going, {displayName}!</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                {Math.max(DAILY_GOAL - consumedCalories, 0)} kcal remaining
+              </p>
+            </div>
+          </div>
+
+{/* 🔍 AI SCANNING HUB (Replacement Code) */}
+<div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-10">
+  
+  {/* 1. MEAL SCANNER */}
+  <motion.button 
+    whileHover={{ y: -5 }}
+    whileTap={{ scale: 0.95 }}
+    onClick={() => window.location.href = "/scan"} 
+    className="bg-slate-900 text-white p-5 rounded-[2.5rem] shadow-xl flex flex-col items-center justify-center cursor-pointer group min-h-[120px]"
+  >
+    <div className="bg-white/10 p-3 rounded-2xl group-hover:bg-white/20 mb-2">
+      <Camera size={22} strokeWidth={2.5} />
+    </div>
+    <span className="text-[10px] font-black uppercase tracking-wider italic">Scan Meal</span>
+  </motion.button>
+
+  {/* 2. PRESCRIPTION AI */}
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className={`${isDarkMode ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-blue-50/50 border-blue-100 text-slate-900'} p-5 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center group min-h-[120px]`}
+  >
+    <div className="bg-blue-500/10 p-3 rounded-2xl text-blue-500 mb-2">
+      <ClipboardList size={22} />
+    </div>
+    <h4 className="font-black text-[9px] uppercase italic leading-none">Prescription</h4>
+    <p className="text-[7px] text-gray-400 mt-1 font-bold uppercase tracking-tighter italic">AI Digitize</p>
+  </motion.div>
+
+  {/* 3. REPORT SCANNER */}
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className={`${isDarkMode ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-purple-50/50 border-purple-100 text-slate-900'} p-5 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center group min-h-[120px]`}
+  >
+    <div className="bg-purple-500/10 p-3 rounded-2xl text-purple-500 mb-2">
+      <FileText size={22} />
+    </div>
+    <h4 className="font-black text-[9px] uppercase italic leading-none">Lab Reports</h4>
+    <p className="text-[7px] text-gray-400 mt-1 font-bold uppercase tracking-tighter italic">AI Analysis</p>
+  </motion.div>
+
+  {/* 4. FOOD LABELS */}
+  <motion.div 
+    whileHover={{ y: -5 }}
+    className={`${isDarkMode ? 'bg-slate-800/50 border-slate-700 text-white' : 'bg-orange-50/50 border-orange-100 text-slate-900'} p-5 rounded-[2.5rem] border-2 border-dashed flex flex-col items-center justify-center text-center group min-h-[120px]`}
+  >
+    <div className="bg-orange-500/10 p-3 rounded-2xl text-orange-500 mb-2">
+      <Tag size={22} />
+    </div>
+    <h4 className="font-black text-[9px] uppercase italic leading-none">Food Label</h4>
+    <p className="text-[7px] text-gray-400 mt-1 font-bold uppercase tracking-tighter italic">Safety Check</p>
+  </motion.div>
+</div>
+        </motion.div>
+        
+
+
+
+
+{/* 🟢 WATER & STEPS TRACKERS SECTION */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+  
+  {/* Water Tracker Card */}
+  <motion.div 
+    initial={{ opacity: 0, x: -20 }}
+    animate={{ opacity: 1, x: 0 }}
+    className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-blue-100'} p-8 rounded-[2.5rem] border shadow-sm relative overflow-hidden group min-h-[220px] flex flex-col justify-center`}
+  >
+    <AnimatePresence>
+      {waterGlasses >= 12 && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="absolute inset-0 z-20 bg-[#38BDF8] flex flex-col items-center justify-center text-center p-6"
+        >
+          <div className="bg-white/20 p-3 rounded-full mb-3"><Activity className="text-white" size={30} /></div>
+          <h4 className="text-white font-black italic text-xl uppercase">Well Done, {displayName}!</h4>
+          <p className="text-white/90 text-[10px] font-bold uppercase tracking-widest mt-1">Daily hydration goal reached! 💧</p>
+          <button onClick={() => setWaterGlasses(0)} className="mt-4 text-white/70 text-[9px] font-black uppercase tracking-widest hover:text-white underline decoration-2 underline-offset-4">Reset Tracker</button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    <div className="flex justify-between items-start relative z-10">
+      <div>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#38BDF8] mb-1 italic">Hydration</p>
+        <h3 className={`${isDarkMode ? 'text-white' : 'text-gray-900'} text-4xl font-black italic tracking-tighter`}>
+          {waterGlasses * 250}<span className="text-sm font-medium text-gray-400 not-italic ml-1">ml</span>
+        </h3>
+        <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-tighter italic">
+          Progress: {waterGlasses} / 12 Glasses
+        </p>
+      </div>
+      <div className="flex flex-col items-center gap-2">
+        <button 
+          onClick={() => setWaterGlasses(prev => Math.min(prev + 1, 12))}
+          className="bg-[#38BDF8] text-white p-4 rounded-2xl hover:bg-blue-500 active:scale-90 transition-all shadow-lg shadow-blue-100"
+        >
+          <Plus size={20} strokeWidth={4} />
+        </button>
+        {waterGlasses > 0 && (
+          <button onClick={() => setWaterGlasses(prev => Math.max(prev - 1, 0))} className="text-gray-400 hover:text-red-400 text-[9px] font-black uppercase tracking-tighter">Minus</button>
         )}
-      </motion.main>
+      </div>
+    </div>
+    
+    {/* Water Wave Animation */}
+    <motion.div 
+      animate={{ y: 220 - (waterGlasses * 18.3) }}
+      className="absolute bottom-0 left-0 right-0 h-[220px] bg-[#38BDF8]/15 -z-0 transition-all duration-1000 ease-out"
+      style={{ borderRadius: '45% 45% 0 0' }}
+    />
+  </motion.div>
+
+  {/* Steps Tracker Card */}
+  <motion.div 
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    className={`${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-blue-100 text-slate-900'} p-8 rounded-[2.5rem] border shadow-sm relative overflow-hidden min-h-[220px] flex flex-col justify-center`}
+  >
+    <AnimatePresence>
+      {stepsCount >= 10000 && (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="absolute inset-0 z-20 bg-[#22C55E] flex flex-col items-center justify-center text-center p-6"
+        >
+          <div className="bg-white/20 p-3 rounded-full mb-3"><Target className="text-white" size={30} /></div>
+          <h4 className="text-white font-black italic text-xl uppercase">Legendary, {displayName}!</h4>
+          <p className="text-white/90 text-[10px] font-bold uppercase tracking-widest mt-1">10,000 Steps Goal Reached! 👟</p>
+          <button onClick={() => setStepsCount(0)} className="mt-4 text-white/70 text-[9px] font-black uppercase tracking-widest hover:text-white underline decoration-2 underline-offset-4">Reset Steps</button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    <div className="flex justify-between items-center relative z-10">
+      <div className="flex-1">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#22C55E] mb-1 italic">Activity</p>
+        <h3 className="text-4xl font-black italic tracking-tighter">
+          {stepsCount.toLocaleString()}<span className="text-sm font-medium text-gray-400 not-italic ml-1 uppercase">steps</span>
+        </h3>
+        <div className="w-40 h-2 bg-gray-100 rounded-full mt-4 overflow-hidden relative">
+          <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min((stepsCount / 10000) * 100, 100)}%` }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="h-full bg-[#22C55E] rounded-full shadow-[0_0_12px_rgba(34,197,94,0.3)]"
+          />
+        </div>
+        <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-tighter italic">Daily Target: 10k</p>
+      </div>
+
+      <div className="flex flex-col items-center gap-2">
+        <button 
+          onClick={() => setStepsCount(prev => Math.min(prev + 500, 10000))}
+          className="bg-[#22C55E] text-white p-4 rounded-2xl hover:bg-green-600 active:scale-90 transition-all shadow-lg shadow-green-100"
+        >
+          <Plus size={20} strokeWidth={4} />
+        </button>
+        {stepsCount > 0 && (
+          <button onClick={() => setStepsCount(prev => Math.max(prev - 500, 0))} className="text-gray-400 hover:text-red-500 text-[9px] font-black uppercase tracking-tighter">Minus</button>
+        )}
+      </div>
+    </div>
+  </motion.div>
+
+</div>
+
+        {/* 🟢 ACTION GRID */}
+        {!isGuest && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div onClick={() => window.location.href = "/profile"} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-blue-100 text-slate-900'} p-8 rounded-[2.5rem] shadow-xl flex items-center justify-between cursor-pointer border hover:-translate-y-2 transition-all`}>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">BMI Status</p><h3 className="text-2xl font-black italic">{profile?.bmi || "19.84"}</h3></div>
+              <div className="bg-blue-500/10 p-4 rounded-2xl text-blue-500"><Target size={32} /></div>
+            </div>
+            <div onClick={() => window.location.href = "/diet"} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-blue-100 text-slate-900'} p-8 rounded-[2.5rem] shadow-xl flex items-center justify-between cursor-pointer border hover:-translate-y-2 transition-all group`}>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Diet Plan</p><h3 className="text-2xl font-black italic flex items-center">VIEW <ChevronRight className="group-hover:translate-x-1 transition-transform" /></h3></div>
+              <div className="bg-orange-500/10 p-4 rounded-2xl text-orange-500"><Utensils size={32} /></div>
+            </div>
+            <div onClick={() => window.location.href = "/exercise"} className={`${isDarkMode ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-blue-100 text-slate-900'} p-8 rounded-[2.5rem] shadow-xl flex items-center justify-between cursor-pointer border hover:-translate-y-2 transition-all group`}>
+              <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Workouts</p><h3 className="text-2xl font-black italic flex items-center">EXERCISE <ChevronRight className="group-hover:translate-x-1 transition-transform" /></h3></div>
+              <div className="bg-purple-500/10 p-4 rounded-2xl text-purple-500"><Dumbbell size={32} /></div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <footer className="text-center mt-10 opacity-30 text-[10px] font-black uppercase tracking-[0.5em]">
+        All rights reserved. Calorie.Ai 2026.
+      </footer>
     </div>
   )
 }
